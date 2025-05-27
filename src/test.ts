@@ -9,99 +9,185 @@ import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { HttpApiDecodeError } from "@effect/platform/HttpApiError";
 import { Console, Effect, Layer, Schema } from "effect";
 import { createServer } from "node:http";
-import { LongUrl, ShortUrl } from "./domain/types";
-import { DatabaseTag, InMemoryDatabase } from "./persistence/database";
+import { DatabaseLive } from "./persistence/database";
+import {
+    ShortenerServiceLive,
+    ShortenerServiceTag,
+} from "./services/url-shortener-service";
+import { asLongUrl, asShortUrl, LongUrl, ShortUrl } from "./domain/types";
+import { fold } from "fp-ts/lib/Option";
+import { IllegalArgumentException } from "effect/Cause";
+import { AnyString } from "@effect/platform/HttpApiSchema";
 
-const MyApi = HttpApi.make("Url Shortener").add(
-    HttpApiGroup.make("Url Shortener").add(
-        HttpApiEndpoint.get("get all urls")`/all`.addSuccess(
-            Schema.Array(
-                Schema.Struct({
-                    longUrl: Schema.String,
-                    shortUrl: Schema.String,
+type Response = {
+    status: 302 | 400;
+    headers: Record<string, string>;
+    body: string | undefined;
+};
+
+const getAllProgram = Effect.flatMap(ShortenerServiceTag, (service) =>
+    service.getAll().pipe(
+        Effect.map((pairs) =>
+            pairs.map((pair) => ({
+                longUrl: pair.longUrl.value,
+                shortUrl: pair.shortUrl.value,
+            }))
+        ),
+        Effect.mapError(
+            (error) =>
+                new HttpApiDecodeError({
+                    message: error.message,
+                    issues: [
+                        {
+                            _tag: "Type",
+                            message: error.message,
+                            path: [],
+                        },
+                    ],
                 })
-            )
         )
     )
-    // .add(
-    //     HttpApiEndpoint.post("shorten long url")`/shorten`
-    //         .setPayload(
-    //             Schema.Struct({
-    //                 longUrl: Schema.String,
-    //             })
-    //         )
-    //         .addSuccess(
-    //             Schema.String // returned the generated short url
-    //         )
-    // )
-    // .add(
-    //     HttpApiEndpoint.get("redirect to long url")`/:shortUrl`.addSuccess(
-    //         Schema.Void
-    //     )
-    // )
 );
 
-// export const DatabaseTag = Context.Tag("DatabaseAlgService")<DatabaseAlg, never>();
+const shortenUrlProgram = (longUrl: LongUrl) =>
+    Effect.flatMap(ShortenerServiceTag, (service) =>
+        service.store_long_url_and_get_short_url(longUrl).pipe(
+            Effect.map((shortUrl) => `http://localhost:8080/${shortUrl.value}`), //todo: find a better way to pass the domain and port
+            Effect.mapError(
+                (error) =>
+                    new HttpApiDecodeError({
+                        message: error.message,
+                        issues: [
+                            {
+                                _tag: "Type",
+                                message: error.message,
+                                path: [],
+                            },
+                        ],
+                    })
+            )
+        )
+    );
 
-const DatabaseLive = Layer.succeed(
-    DatabaseTag,
-    new InMemoryDatabase(new Map<LongUrl, ShortUrl>())
+// const redirectToLongUrlProgram = (shortUrl: ShortUrl) =>
+//     Effect.flatMap(ShortenerServiceTag, (service) =>
+//         service.getLongUrlWithShortUrl(shortUrl).pipe(
+//             Effect.map((longUrlOpt) =>
+//                 fold(
+//                     () =>
+//                         ({
+//                             status: 400 as const,
+//                             headers: {},
+//                             body: "URL not found",
+//                         } as Response),
+//                     (longUrl: LongUrl) =>
+//                         ({
+//                             status: 302 as const,
+//                             headers: { Location: longUrl.value },
+//                             body: undefined,
+//                         } as Response)
+//                 )(longUrlOpt)
+//             ),
+//             Effect.mapError(
+//                 (error) =>
+//                     new HttpApiDecodeError({
+//                         message: error.message,
+//                         issues: [
+//                             {
+//                                 _tag: "Type",
+//                                 message: error.message,
+//                                 path: [],
+//                             },
+//                         ],
+//                     })
+//             )
+//         )
+//     );
+
+const redirectToLongUrlProgram = (shortUrl: ShortUrl) =>
+    Effect.flatMap(ShortenerServiceTag, (service) =>
+        service.getLongUrlWithShortUrl(shortUrl).pipe(
+            Effect.flatMap((longUrlOpt) =>
+                fold(
+                    () => response.text("URL not found", { status: 404 }),
+                    (longUrl: LongUrl) => Http.response.redirect(longUrl.value)
+                )(longUrlOpt)
+            ),
+            Effect.mapError(
+                (error) =>
+                    new HttpApiDecodeError({
+                        message: error.message,
+                        issues: [
+                            {
+                                _tag: "Type",
+                                message: error.message,
+                                path: [],
+                            },
+                        ],
+                    })
+            )
+        )
+    );
+
+const MyApi = HttpApi.make("Url Shortener").add(
+    HttpApiGroup.make("Url Shortener")
+        .add(
+            HttpApiEndpoint.get("get all urls")`/all`.addSuccess(
+                Schema.Array(
+                    Schema.Struct({
+                        longUrl: Schema.String,
+                        shortUrl: Schema.String,
+                    })
+                )
+            )
+        )
+        .add(
+            HttpApiEndpoint.post("shorten long url")`/shorten`
+                .setPayload(
+                    Schema.Struct({
+                        longUrl: Schema.String,
+                    })
+                )
+                .addSuccess(
+                    Schema.String // returned the generated short url
+                )
+        )
+        .add(
+            HttpApiEndpoint.get("redirect to long url")`/:shortUrl`
+                .setPath(
+                    Schema.Struct({
+                        shortUrl: Schema.String,
+                    })
+                )
+                .addSuccess(Schema.Void)
+        )
 );
-
-// const URLShorternerLive = HttpApiBuilder.group(
-//     MyApi,
-//     "Url Shortener",
-//     (handlers) =>
-//         handlers.handle("get all urls", () =>
-//             Effect.flatMap(DatabaseTag, (db) =>
-//                 Effect.map(db.getAll(), (pairs) => ({
-//                     longUrl: pairs.longUrl.value,
-//                     shortUrl: pairs.shortUrl.value
-//             }))
-//     // .handle("shorten long url", (request) =>
-//     //     Effect.succeed(
-//     //         `Shorten url is called ${request.payload.longUrl}`
-//     //     )
-//     // )
-//     // .handle("redirect to long url", () => Effect.succeed(""))
-// );
 
 const URLShortenerLive = HttpApiBuilder.group(
     MyApi,
     "Url Shortener",
     (handlers) =>
-        handlers.handle("get all urls", () =>
-            Effect.flatMap(DatabaseTag, (db) =>
-                db.getAll().pipe(
-                    Effect.map((pairs) =>
-                        pairs.map((pair) => ({
-                            longUrl: pair.longUrl.value,
-                            shortUrl: pair.shortUrl.value,
-                        }))
-                    ),
-                    Effect.mapError(
-                        (error) =>
-                            new HttpApiDecodeError({
-                                message: error.message,
-                                issues: [
-                                    {
-                                        _tag: "Type",
-                                        message: error.message,
-                                        path: [],
-                                    },
-                                ],
-                            })
-                    )
+        handlers
+            .handle("get all urls", () => getAllProgram)
+            .handle("shorten long url", (request) =>
+                shortenUrlProgram(asLongUrl(request.payload.longUrl))
+            )
+            .handle("redirect to long url", (request) =>
+                Effect.flatMap(
+                    Effect.sync(() => console.log("Request:", request)),
+                    () =>
+                        redirectToLongUrlProgram(
+                            asShortUrl(request.path.shortUrl)
+                        )
                 )
             )
-        )
 );
 
 // Provide the implementation for the API
 const MyApiLive = HttpApiBuilder.api(MyApi).pipe(
     Layer.provide(URLShortenerLive),
+    Layer.provide(ShortenerServiceLive),
     Layer.provide(DatabaseLive)
-    // Layer.provide(UrlShortenerServiceLive)
 );
 
 // Set up the server using NodeHttpServer on port 3000

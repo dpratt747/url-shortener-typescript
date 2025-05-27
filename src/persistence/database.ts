@@ -1,5 +1,5 @@
 import { LongUrl, ShortUrl, GetUrlPair, eqShortUrl } from "../domain/types";
-import { Context, Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import * as O from "fp-ts/Option";
 import { Eq } from "fp-ts/Eq";
 
@@ -64,12 +64,10 @@ export class InMemoryDatabase extends DatabaseAlg {
     }
 }
 
-//Context.TagClass<DatabaseAlg, "DatabaseAlgService", err>
-
-// export const DatabaseTag: Context.TagClass<DatabaseAlg, "DatabaseAlgService", Error> = Context.Tag("DatabaseAlgService")<
-//     DatabaseAlg,
-//     Error
-// >();
-
 export const DatabaseTag =
     Context.GenericTag<DatabaseAlg>("DatabaseAlgService");
+
+export const DatabaseLive = Layer.succeed(
+    DatabaseTag,
+    new InMemoryDatabase(new Map<LongUrl, ShortUrl>())
+);
