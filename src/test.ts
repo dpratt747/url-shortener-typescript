@@ -1,71 +1,135 @@
-import { Console, Effect } from "effect";
-import { LongUrl, ShortUrl, asLongUrl, asShortUrl } from "./domain/types";
-import { InMemoryDatabase } from "./persistence/database";
-import { UrlShortenerService } from "./services/url-shortener-service";
+import {
+    HttpApi,
+    HttpApiBuilder,
+    HttpApiEndpoint,
+    HttpApiGroup,
+    HttpApiSwagger,
+} from "@effect/platform";
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { HttpApiDecodeError } from "@effect/platform/HttpApiError";
+import { Console, Effect, Layer, Schema } from "effect";
+import { createServer } from "node:http";
+import { LongUrl, ShortUrl } from "./domain/types";
+import { DatabaseTag, InMemoryDatabase } from "./persistence/database";
 
-// console.log(map);
+const MyApi = HttpApi.make("Url Shortener").add(
+    HttpApiGroup.make("Url Shortener").add(
+        HttpApiEndpoint.get("get all urls")`/all`.addSuccess(
+            Schema.Array(
+                Schema.Struct({
+                    longUrl: Schema.String,
+                    shortUrl: Schema.String,
+                })
+            )
+        )
+    )
+    // .add(
+    //     HttpApiEndpoint.post("shorten long url")`/shorten`
+    //         .setPayload(
+    //             Schema.Struct({
+    //                 longUrl: Schema.String,
+    //             })
+    //         )
+    //         .addSuccess(
+    //             Schema.String // returned the generated short url
+    //         )
+    // )
+    // .add(
+    //     HttpApiEndpoint.get("redirect to long url")`/:shortUrl`.addSuccess(
+    //         Schema.Void
+    //     )
+    // )
+);
 
-// console.log(Array.from(map));
+// export const DatabaseTag = Context.Tag("DatabaseAlgService")<DatabaseAlg, never>();
 
-// const heeelo = 1002;
+const DatabaseLive = Layer.succeed(
+    DatabaseTag,
+    new InMemoryDatabase(new Map<LongUrl, ShortUrl>())
+);
 
-// const asUrlPair = Array.from(map.entries()).map(
-//     ([longUrl, shortUrl]): GetUrlPair => ({
-//         longUrl,
-//         shortUrl,
-//     })
+// const URLShorternerLive = HttpApiBuilder.group(
+//     MyApi,
+//     "Url Shortener",
+//     (handlers) =>
+//         handlers.handle("get all urls", () =>
+//             Effect.flatMap(DatabaseTag, (db) =>
+//                 Effect.map(db.getAll(), (pairs) => ({
+//                     longUrl: pairs.longUrl.value,
+//                     shortUrl: pairs.shortUrl.value
+//             }))
+//     // .handle("shorten long url", (request) =>
+//     //     Effect.succeed(
+//     //         `Shorten url is called ${request.payload.longUrl}`
+//     //     )
+//     // )
+//     // .handle("redirect to long url", () => Effect.succeed(""))
 // );
 
-// console.log(asUrlPair);
-// console.log(typeof asUrlPair);
+const URLShortenerLive = HttpApiBuilder.group(
+    MyApi,
+    "Url Shortener",
+    (handlers) =>
+        handlers.handle("get all urls", () =>
+            Effect.flatMap(DatabaseTag, (db) =>
+                db.getAll().pipe(
+                    Effect.map((pairs) =>
+                        pairs.map((pair) => ({
+                            longUrl: pair.longUrl.value,
+                            shortUrl: pair.shortUrl.value,
+                        }))
+                    ),
+                    Effect.mapError(
+                        (error) =>
+                            new HttpApiDecodeError({
+                                message: error.message,
+                                issues: [
+                                    {
+                                        _tag: "Type",
+                                        message: error.message,
+                                        path: [],
+                                    },
+                                ],
+                            })
+                    )
+                )
+            )
+        )
+);
 
-function generateAlphanumeric(length: number): string {
-    const chars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let result = "";
+// Provide the implementation for the API
+const MyApiLive = HttpApiBuilder.api(MyApi).pipe(
+    Layer.provide(URLShortenerLive),
+    Layer.provide(DatabaseLive)
+    // Layer.provide(UrlShortenerServiceLive)
+);
 
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+// Set up the server using NodeHttpServer on port 3000
+const serverLive = (port: number) =>
+    HttpApiBuilder.serve().pipe(
+        Layer.provide(HttpApiSwagger.layer()),
+        Layer.provide(MyApiLive),
+        Layer.provide(NodeHttpServer.layer(createServer, { port }))
+    );
 
-    return result;
-}
+// Launch the server at http://localhost:8080/docs
 
-// const smallProgram = Effect.gen(function* (_) {
-//     const db = new InMemoryDatabase(new Map<LongUrl, ShortUrl>());
-//     const longUrl = asLongUrl("something very long and very wrong");
-//     const shortUrl = yield* _(
-//         Effect.try({
-//             try: () => asShortUrl(generateAlphanumeric(5)),
-//             catch: (error) => new Error(`Failed to store URL: ${error}`),
-//         })
-//     );
-//     yield* _(db.store(longUrl, shortUrl));
-//     return shortUrl;
-// });
-
+// Main program
 const program = Effect.gen(function* (_) {
+    const port = 8080;
     // Create the server
-    const db = new InMemoryDatabase(new Map<LongUrl, ShortUrl>());
-    const service = new UrlShortenerService(db);
-    const longUrl = asLongUrl(
-        "something very long long as it is 1 this is not long enough is it"
-    );
+    const server = Layer.launch(serverLive(port)).pipe(NodeRuntime.runMain);
+
     // Start the server
-    // yield* _(
-    //     db.store(
-    //         asLongUrl("something very long long as it is 1"),
-    //         asShortUrl("short")
-    //     )
-    // );
-    const shortUrl = yield* _(
-        service.store_long_url_and_get_short_url(longUrl)
-    );
+    // Log success message
+    yield* _(Console.log(`Server running on http://localhost:${port}`));
 
-    yield* _(Console.log("returned short url:", shortUrl));
-
-    // If you want to log the db state, do it here:
-    yield* _(Console.log("Database state:", db));
+    // Keep the server running (or add shutdown logic)
+    yield* _(Effect.never);
 });
 
-Effect.runSync(program);
+// Run the program with proper error handling
+Effect.runPromise(program).catch((error) => {
+    console.error("Server failed:", error);
+    process.exit(1);
+});

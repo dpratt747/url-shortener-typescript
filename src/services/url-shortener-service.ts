@@ -50,11 +50,11 @@ export class UrlShortenerService extends ShortenerServiceAlg {
     }
 
     getAll(): Effect.Effect<GetUrlPair[], Error, never> {
-        throw new Error("Method not implemented.");
+        return this.database.getAll();
     }
     getLongUrlWithShortUrl(
         shortUrl: ShortUrl
     ): Effect.Effect<O.Option<LongUrl>, Error, never> {
-        throw new Error("Method not implemented.");
+        return this.database.getLongUrlWithShortUrl(shortUrl);
     }
 }
