@@ -50,15 +50,4 @@ ts-node src/test.ts
 nodemon --exec ts-node src/test.ts
 ```
 
-```ts
-// Example using Express-style handler
-app.get("/:shortUrl", async (req, res) => {
-    const { shortUrl } = req.params;
-    const urlEntry = await db.findUrlByShortCode(shortUrl);
-
-    if (urlEntry) {
-        return res.redirect(302, urlEntry.longUrl);
-    }
-    return res.status(404).send("URL not found");
-});
-```
+http://localhost:8080/docs
