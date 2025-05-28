@@ -6,7 +6,6 @@ import {
     HttpApiSchema,
     HttpServerResponse,
 } from "@effect/platform";
-import { HttpApiDecodeError } from "@effect/platform/HttpApiError";
 import { Effect, Schema } from "effect";
 import * as O from "fp-ts/Option";
 import { asLongUrl, asShortUrl, LongUrl, ShortUrl } from "../domain/types";

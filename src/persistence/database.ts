@@ -1,7 +1,7 @@
-import { LongUrl, ShortUrl, GetUrlPair, eqShortUrl } from "../domain/types";
 import { Context, Effect, Layer } from "effect";
-import * as O from "fp-ts/Option";
 import { Eq } from "fp-ts/Eq";
+import * as O from "fp-ts/Option";
+import { GetUrlPair, LongUrl, ShortUrl, eqShortUrl } from "../domain/types";
 
 export abstract class DatabaseAlg {
     abstract store(
@@ -50,7 +50,7 @@ export class InMemoryDatabase extends DatabaseAlg {
                 Array.from(this.state.entries()).map(
                     ([longUrl, shortUrl]): GetUrlPair => ({ longUrl, shortUrl })
                 ),
-            catch: (error) => new Error(`Failed to store URL: ${error}`),
+            catch: (error) => new Error(`Failed to get all URLs: ${error}`),
         });
     }
 
@@ -59,15 +59,14 @@ export class InMemoryDatabase extends DatabaseAlg {
     ): Effect.Effect<O.Option<LongUrl>, Error, never> {
         return Effect.try({
             try: () => this.getKeyByValue(this.state, shortUrl, eqShortUrl),
-            catch: (error) => new Error(`Failed to store URL: ${error}`),
+            catch: (error) => new Error(`Failed to get long URL: ${error}`),
         });
     }
 }
 
-export const DatabaseTag =
-    Context.GenericTag<DatabaseAlg>("DatabaseAlgService");
+export const DatabaseTag = Context.GenericTag<DatabaseAlg>("DatabaseAlg");
 
-export const DatabaseLive = Layer.succeed(
+export const InMemoryDatabaseLive = Layer.succeed(
     DatabaseTag,
     new InMemoryDatabase(new Map<LongUrl, ShortUrl>())
 );

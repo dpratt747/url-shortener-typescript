@@ -6,14 +6,14 @@ import {
     URLShortenerLive,
 } from "./endpoints/url-shortener-endpoints";
 import { ShortenerServiceLive } from "./services/url-shortener-service";
-import { DatabaseLive } from "./persistence/database";
+import { InMemoryDatabaseLive } from "./persistence/database";
 import { createServer } from "node:http";
 
 // Provide the implementation for the API
 const MyApiLive = HttpApiBuilder.api(URLShortenerAPI).pipe(
     Layer.provide(URLShortenerLive),
     Layer.provide(ShortenerServiceLive),
-    Layer.provide(DatabaseLive)
+    Layer.provide(InMemoryDatabaseLive)
 );
 
 const serverLive = (port: number) =>
@@ -25,18 +25,13 @@ const serverLive = (port: number) =>
 
 const program = Effect.gen(function* (_) {
     const port = 8080;
-    // Create the server
-    const server = Layer.launch(serverLive(port)).pipe(NodeRuntime.runMain);
+    Layer.launch(serverLive(port)).pipe(NodeRuntime.runMain);
 
-    // Start the server
-    // Log success message
     yield* _(Console.log(`Server running on http://localhost:${port}`));
 
-    // Keep the server running (or add shutdown logic)
     yield* _(Effect.never);
 });
 
-// Run the program with proper error handling
 Effect.runPromise(program).catch((error) => {
     console.error("Server failed:", error);
     process.exit(1);

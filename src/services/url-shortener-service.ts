@@ -1,14 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import * as O from "fp-ts/Option";
-import {
-    GetUrlPair,
-    LongUrl,
-    ShortUrl,
-    asLongUrl,
-    asShortUrl,
-} from "../domain/types";
+import { GetUrlPair, LongUrl, ShortUrl, asShortUrl } from "../domain/types";
 import { DatabaseAlg, DatabaseTag } from "../persistence/database";
-import { cons } from "effect/List";
 
 abstract class ShortenerServiceAlg {
     abstract storeLongUrlAndGetShortUrl(
@@ -59,25 +52,16 @@ export class UrlShortenerService extends ShortenerServiceAlg {
     getAll(): Effect.Effect<GetUrlPair[], Error, never> {
         return this.database.getAll();
     }
+
     getLongUrlWithShortUrl(
         shortUrl: ShortUrl
     ): Effect.Effect<O.Option<LongUrl>, Error, never> {
-        console.log("reached here");
-        const tt = Effect.runSync(
-            this.database.getLongUrlWithShortUrl(shortUrl)
-        );
-        console.log(
-            `${
-                O.getOrElse(() => asLongUrl("not found"))(tt).value
-            } -------111111---------`
-        );
         return this.database.getLongUrlWithShortUrl(shortUrl);
     }
 }
 
-export const ShortenerServiceTag = Context.GenericTag<ShortenerServiceAlg>(
-    "ShortenerServiceAlg"
-);
+export const ShortenerServiceTag =
+    Context.GenericTag<ShortenerServiceAlg>("ShortenerService");
 
 export const ShortenerServiceLive = Layer.effect(
     ShortenerServiceTag,
