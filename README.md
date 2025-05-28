@@ -1,6 +1,7 @@
 -   [Effect](https://effect.website/)
 -   [Effect Platform](https://effect.website/docs/guides/platform/introduction)
 -   [fp-ts](https://gcanti.github.io/fp-ts/)
+-   [Http-Server](https://github.com/Effect-TS/effect/blob/main/packages/platform/README.md#http-server)
 
 ## Project setup:
 

@@ -11,7 +11,7 @@ import { DatabaseAlg, DatabaseTag } from "../persistence/database";
 import { cons } from "effect/List";
 
 abstract class ShortenerServiceAlg {
-    abstract store_long_url_and_get_short_url(
+    abstract storeLongUrlAndGetShortUrl(
         longUrl: LongUrl
     ): Effect.Effect<ShortUrl, Error, never>;
 
@@ -39,7 +39,7 @@ export class UrlShortenerService extends ShortenerServiceAlg {
         return result;
     }
 
-    store_long_url_and_get_short_url(
+    storeLongUrlAndGetShortUrl(
         longUrl: LongUrl
     ): Effect.Effect<ShortUrl, Error, never> {
         const self = this;
