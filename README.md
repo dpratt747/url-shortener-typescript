@@ -47,7 +47,7 @@ R -> requirements /environment
 
 ```bash
 ts-node src/test.ts
-nodemon --exec ts-node src/test.ts
+nodemon --exec ts-node src/index.ts
 ```
 
 http://localhost:8080/docs
